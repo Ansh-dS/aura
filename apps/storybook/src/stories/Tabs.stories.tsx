@@ -43,10 +43,10 @@ export const Underline: Story = {
           Billing
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="account">
+      <TabsContent value="account" className="p-s">
         Account settings and preferences. Configure your profile here.
       </TabsContent>
-      <TabsContent value="security">
+      <TabsContent value="security" className="p-s">
         Password and authentication settings. Two-factor is recommended.
       </TabsContent>
     </Tabs>
@@ -75,22 +75,13 @@ export const ModernPill: Story = {
           Privacy
         </TabsTrigger>
       </TabsList>
-      <TabsContent
-        value="general"
-        className="p-4 bg-surface-sunken rounded-lg mt-4 border border-border-default"
-      >
+      <TabsContent value="general" className="p-s">
         General profile information and avatar settings.
       </TabsContent>
-      <TabsContent
-        value="notifications"
-        className="p-4 bg-surface-sunken rounded-lg mt-4 border border-border-default"
-      >
+      <TabsContent value="notifications" className="p-s">
         Manage how and when you receive alerts.
       </TabsContent>
-      <TabsContent
-        value="privacy"
-        className="p-4 bg-surface-sunken rounded-lg mt-4 border border-border-default"
-      >
+      <TabsContent value="privacy" className="p-s">
         Control your visibility and data sharing.
       </TabsContent>
     </Tabs>
@@ -116,7 +107,7 @@ export const RiversideGlass: Story = {
         <TabsTrigger value="audio">Audio</TabsTrigger>
         <TabsTrigger value="effects">Effects</TabsTrigger>
       </TabsList>
-      <TabsContent value="video" className="text-fg-primary opacity-80 mt-4">
+      <TabsContent value="video" className="text-fg-primary opacity-80 p-s">
         Timeline resolution and frame rate settings.
       </TabsContent>
     </Tabs>
@@ -136,13 +127,13 @@ export const VerticalNavigation: Story = {
   render: (args) => (
     <Tabs {...args}>
       <TabsList className="w-45">
-        <TabsTrigger value="db" startIcon={<Database />}>
+        <TabsTrigger value="db" startIcon={<Database />} className="w-full">
           Database
         </TabsTrigger>
-        <TabsTrigger value="auth" startIcon={<Lock />}>
+        <TabsTrigger value="auth" startIcon={<Lock />} className="w-full">
           Auth
         </TabsTrigger>
-        <TabsTrigger value="storage" startIcon={<Folder />}>
+        <TabsTrigger value="storage" startIcon={<Folder />} className="w-full">
           Storage
         </TabsTrigger>
       </TabsList>

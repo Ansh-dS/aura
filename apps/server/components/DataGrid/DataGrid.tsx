@@ -6,12 +6,19 @@ type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
 
+/**
+ * DataGridContext allows sub-components (like DataGridHead and DataGridCell)
+ * to access the global grid configuration (like 'size') without prop drilling.
+ */
 const DataGridContext = createContext<{
   size?: 'sm' | 'md' | 'lg' | null | undefined
 }>({
   size: 'md',
 })
 
+/**
+ * Checks if a component type corresponds to a standard native HTML table section tag.
+ */
 const isNativeTableSection = (type: unknown): boolean => {
   return (
     typeof type === 'string' &&
@@ -23,6 +30,10 @@ const isNativeTableSection = (type: unknown): boolean => {
   )
 }
 
+/**
+ * Checks if a given React node is a valid table section component,
+ * either a native tag (thead, tbody, tfoot) or one of our custom DataGrid wrappers.
+ */
 const isDataGridSection = (node: React.ReactNode): boolean => {
   if (!React.isValidElement(node)) {
     return false
@@ -38,8 +49,13 @@ const isDataGridSection = (node: React.ReactNode): boolean => {
   )
 }
 
+/**
+ * Normalization helper: Ensures children are properly nested within standard HTML structure.
+ * If a developer places <DataGridRow> elements directly inside <DataGrid>, this function
+ * automatically wraps those orphaned rows into a <DataGridBody> wrapper.
+ */
 const normalizeTableChildren = (children: React.ReactNode): React.ReactNode => {
-  // .toArray automatically flattens Fragments one level deep!
+  // React.Children.toArray automatically flattens Fragment wrappers one level deep
   const nodes = React.Children.toArray(children)
 
   if (nodes.length === 0) return children
@@ -47,6 +63,7 @@ const normalizeTableChildren = (children: React.ReactNode): React.ReactNode => {
   const normalized: React.ReactNode[] = []
   let pendingBodyNodes: React.ReactNode[] = []
 
+  // Helper to wrap any accumulated free-floating rows into a DataGridBody block
   const flush = (keyIndex: number) => {
     if (pendingBodyNodes.length > 0) {
       normalized.push(
@@ -60,17 +77,30 @@ const normalizeTableChildren = (children: React.ReactNode): React.ReactNode => {
 
   nodes.forEach((node, index) => {
     if (isDataGridSection(node)) {
+      // If we encounter a valid section header/body/footer, flush accumulated rows first
       flush(index)
       normalized.push(node)
     } else {
+      // Collect non-section nodes (typically rows or cells) to wrap them inside a body
       pendingBodyNodes.push(node)
     }
   })
 
+  // Flush any remaining trailing rows
   flush(nodes.length)
   return normalized
 }
 
+type CleanProps = Prettify<DataGridVariantsType>
+
+export type DataGridProps = CleanProps &
+  React.TableHTMLAttributes<HTMLTableElement>
+
+/**
+ * DataGrid Component
+ * Represents the root wrapper of the table. Handles horizontal scrolling,
+ * rounded corners, and consistent sizing configuration.
+ */
 export const DataGrid = forwardRef<HTMLTableElement, DataGridProps>(
   (props, ref) => {
     const { className, size, children, ...rest } = props
@@ -105,6 +135,12 @@ DataGrid.displayName = 'DataGrid'
 // Helper sub-components for the grid
 // HTMLableSectionElement: following examples of element it contains '<tbody>, <thead>, <tfoot>...'
 // React.HTMLAttributes<HTMLTableSectionElement>: These are the respective types.
+
+/**
+ * DataGridHeader Component
+ * Represents the table header container (<thead>). Applies a sunken background
+ * and subtle bottom border.
+ */
 export const DataGridHeader = forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -120,6 +156,10 @@ export const DataGridHeader = forwardRef<
 ))
 DataGridHeader.displayName = 'DataGridHeader'
 
+/**
+ * DataGridBody Component
+ * Represents the primary body container (<tbody>). Houses the grid rows.
+ */
 export const DataGridBody = forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -128,6 +168,10 @@ export const DataGridBody = forwardRef<
 ))
 DataGridBody.displayName = 'DataGridBody'
 
+/**
+ * DataGridFooter Component
+ * Represents the bottom pagination or summary bar container (<tfoot>).
+ */
 export const DataGridFooter = forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -141,6 +185,12 @@ export const DataGridFooter = forwardRef<
 DataGridFooter.displayName = 'DataGridFooter'
 
 // data-grid-row: each row of table.
+
+/**
+ * DataGridRow Component
+ * Houses cells within a single row. Automatically applies hover background effects
+ * and handles custom states (like selected).
+ */
 export const DataGridRow = forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
@@ -160,6 +210,12 @@ export const DataGridRow = forwardRef<
 DataGridRow.displayName = 'DataGridRow'
 
 // data-grid-head: styles for the head box.
+
+/**
+ * DataGridHead Component
+ * Represents the column header cell (<th>). Adjusts font scales, spacing,
+ * and height according to the grid size.
+ */
 export const DataGridHead = forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
@@ -191,14 +247,15 @@ export const DataGridHead = forwardRef<
     />
   )
 })
-
-type CleanProps = Prettify<DataGridVariantsType>
-
-export type DataGridProps = CleanProps &
-  React.TableHTMLAttributes<HTMLTableElement>
 DataGridHead.displayName = 'DataGridHead'
 
 // data-gird-cell: Each cell.
+
+/**
+ * DataGridCell Component
+ * Represents standard table data cells (<td>). Automatically scales margins,
+ * optical row heights, and text sizing based on the configured grid size.
+ */
 export const DataGridCell = forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>

@@ -10,7 +10,7 @@ const meta: Meta<typeof Popover> = {
       options: ['start', 'center', 'end'],
       description: 'Alignment of the popover relative to the trigger',
     },
-    initialState: {
+    defaultOpen: {
       control: 'boolean',
       description: 'The starting visibility state',
     },
@@ -49,7 +49,7 @@ type Story = StoryObj<typeof Popover>
 export const Default: Story = {
   args: {
     align: 'center',
-    initialState: false,
+    defaultOpen: false,
     // Assuming your Button component uses 'children' for text
     children: (
       <Button
@@ -75,7 +75,7 @@ export const Default: Story = {
 export const InitiallyOpen: Story = {
   args: {
     ...Default.args,
-    initialState: true,
+    defaultOpen: true,
     children: <Button text="Already Open" variant="secondary"></Button>,
   },
 }

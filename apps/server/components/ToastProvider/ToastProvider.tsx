@@ -28,6 +28,10 @@ type Prettify<T> = { [K in keyof T]: T[K] } & {}
 /* INTERNAL CONTEXT (For Compound UI Synchronization)                         */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Props shared between the main Toast container and its compound sub-components.
+ * Ensures synchronized layout styling without manual prop-drilling.
+ */
 type ToastUIContextProps = {
   intent: NonNullable<ToastVariantsType['intent']>
   variant: NonNullable<ToastVariantsType['variant']>
@@ -38,13 +42,13 @@ const ToastUIContext = createContext<ToastUIContextProps>({
   variant: 'subtle',
 })
 
-/* -------------------------------------------------------------------------- */
-/* 1. ROOT COMPONENT                                                          */
-/* -------------------------------------------------------------------------- */
-
 export type ToastProps = Prettify<ToastVariantsType> &
   React.HTMLAttributes<HTMLDivElement>
 
+/**
+ * Toast Container: Wraps the notification content, manages intent-to-accessibility mappings,
+ * and distributes styling context to children (icon, title, desc, close).
+ */
 export const Toast = forwardRef<HTMLDivElement, ToastProps>((props, ref) => {
   const {
     intent = 'default',
@@ -54,6 +58,8 @@ export const Toast = forwardRef<HTMLDivElement, ToastProps>((props, ref) => {
     ...rest
   } = props
 
+  // Accessibility Role mapping: errors/warnings announce as disruptive 'alerts',
+  // whereas info/success notify users softly using standard 'status' logs.
   const role = intent === 'error' || intent === 'warning' ? 'alert' : 'status'
 
   return (
@@ -75,10 +81,11 @@ export const Toast = forwardRef<HTMLDivElement, ToastProps>((props, ref) => {
   )
 })
 Toast.displayName = 'Toast'
-/* -------------------------------------------------------------------------- */
-/* 2. THE SMART ICON                                                          */
-/* -------------------------------------------------------------------------- */
 
+/**
+ * ToastIcon: Automatically resolves and displays an icon fitting the parent's intent.
+ * Fallbacks are provided if custom icon elements aren't supplied as children.
+ */
 export const ToastIcon = forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -126,10 +133,10 @@ export const ToastIcon = forwardRef<
 })
 ToastIcon.displayName = 'ToastIcon'
 
-/* -------------------------------------------------------------------------- */
-/* 3. CONTENT WRAPPER                                                         */
-/* -------------------------------------------------------------------------- */
-
+/**
+ * ToastContent: Organizes text stack components (ToastTitle & ToastDescription)
+ * vertically with standardized spacing.
+ */
 export const ToastContent = forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -146,10 +153,10 @@ export const ToastContent = forwardRef<
 ))
 ToastContent.displayName = 'ToastContent'
 
-/* -------------------------------------------------------------------------- */
-/* 4. TYPOGRAPHY (Smart Contrast)                                             */
-/* -------------------------------------------------------------------------- */
-
+/**
+ * ToastTitle: Renders the primary text label. Adapts contrast color
+ * depending on whether the Toast has a filled or transparent background style.
+ */
 export const ToastTitle = forwardRef<
   HTMLParagraphElement,
   Omit<React.HTMLAttributes<HTMLHeadingElement>, 'color'>
@@ -172,6 +179,10 @@ export const ToastTitle = forwardRef<
 })
 ToastTitle.displayName = 'ToastTitle'
 
+/**
+ * ToastDescription: Renders descriptive details below the title.
+ * Automatically aligns color contrast with the parent background style.
+ */
 export const ToastDescription = forwardRef<
   HTMLParagraphElement,
   Omit<React.HTMLAttributes<HTMLParagraphElement>, 'color'>
@@ -197,10 +208,10 @@ export const ToastDescription = forwardRef<
 })
 ToastDescription.displayName = 'ToastDescription'
 
-/* -------------------------------------------------------------------------- */
-/* 5. ACTION / CLOSE BUTTON                                                   */
-/* -------------------------------------------------------------------------- */
-
+/**
+ * ToastAction: Interactive button, traditionally used for close/dismiss operations.
+ * Auto-corrects contrasts for visibility over solid variants.
+ */
 export const ToastAction = forwardRef<
   HTMLButtonElement,
   Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'color'>
@@ -229,6 +240,10 @@ export const ToastAction = forwardRef<
   )
 })
 ToastAction.displayName = 'ToastAction'
+
+/**
+ * Representation of an active individual toast alert metadata in the overlay viewport.
+ */
 type ToastItem = {
   id: string
   intent: 'info' | 'success' | 'warning' | 'error'
@@ -242,44 +257,53 @@ type ToastItem = {
 
 const TOAST_EVENT = 'UI_LIBRARY_TOAST_EVENT'
 
-// 1. The Global Dispatcher
-/*
-  why have we provided "dispatchEvent":
-    Zero Re-render of the page:
-      Only the ToastViewport (the listener) hears the message and re-renders.
-*/
+/**
+ * Triggers a toast globally using a custom event dispatched on window.
+ * Avoids parent page re-renders: Only the ToastViewport listening to this event updates.
+ *
+ * @example
+ * showToast({ intent: 'success', title: 'Successfully saved!' })
+ */
 export const showToast = (config: Omit<ToastItem, 'id'>) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: config }))
   }
 }
 
-// 2. A clean hook for developers
+/**
+ * React hook interface returning the global `showToast` trigger function.
+ */
 export const useToast = () => ({ showToast })
 
 // 3. The isolated viewport (Listens for events)
+/**
+ * Renders the container viewport absolute overlay positioned at the bottom right.
+ * Intercepts window events to enqueue, animate, and time out notifications.
+ */
 const ToastViewport = () => {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   useEffect(() => {
-    const handleEvent = (e: Event) => {
+    const addAndExpireToast = (e: Event) => {
       const detail = (e as CustomEvent<Omit<ToastItem, 'id'>>).detail
       const id = Math.random().toString(36).substring(2, 9)
 
+      // Retain max 3 toasts at a time
       setToasts((prev) => [...prev, { ...detail, id }].slice(-3))
 
+      // Clear toast after timeout
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id))
       }, detail.duration || 5000)
     }
 
-    window.addEventListener(TOAST_EVENT, handleEvent)
-    return () => window.removeEventListener(TOAST_EVENT, handleEvent)
+    window.addEventListener(TOAST_EVENT, addAndExpireToast)
+    return () => window.removeEventListener(TOAST_EVENT, addAndExpireToast)
   }, [])
 
   if (toasts.length === 0 || typeof document === 'undefined') return null
 
-  // inset: moves our alerts at the bottom right cornor.
+  // inset: moves our alerts at the bottom right corner.
   return createPortal(
     <div className="fixed inset-x-4 bottom-4 z-popover pointer-events-none flex justify-end">
       <Stack
@@ -322,7 +346,10 @@ const ToastViewport = () => {
   )
 }
 
-// 4. The Clean Provider
+/**
+ * Root wrapper provider for mounting the global `ToastViewport`.
+ * Should wrap top-level children elements.
+ */
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <>

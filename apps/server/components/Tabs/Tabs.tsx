@@ -5,7 +5,6 @@ import {
   TabsListVariantsType,
 } from './styles'
 import { cn } from '../Utils/utils'
-// STAFF FIX: Importing your foundation primitives!
 import { Box } from '../Box/Box'
 import { Stack } from '../Stack/Stack'
 import { Button } from '../Button/Button'
@@ -16,15 +15,28 @@ type Prettify<T> = { [K in keyof T]: T[K] } & {}
 /* CONTEXT                                                                    */
 /* -------------------------------------------------------------------------- */
 type TabsContextValue = {
-  activeValue: string
-  onValueChange: (value: string) => void
+  /** The identifier of the currently active tab */
+  activeTab: string
+  /** Callback fired when a new tab is selected */
+  onTabChange: (tab: string) => void
+  /** The theme/style variant of the tab list (e.g., 'underline', 'pill', 'glass') */
   variant?: TabsListVariantsType['variant']
+  /** Layout direction: 'horizontal' or 'vertical' */
   orientation?: TabsListVariantsType['orientation']
+  /** Size modifier matching global component density scales: 'sm' | 'md' | 'lg' */
   size?: 'sm' | 'md' | 'lg'
 }
 
+/**
+ * TabsContext provides state and configuration (size, orientation, variant)
+ * to child components (TabsList, TabsTrigger, TabsContent) to orchestrate tab behavior.
+ */
 const TabsContext = createContext<TabsContextValue | undefined>(undefined)
 
+/**
+ * Custom hook to consume TabsContext.
+ * Throws a developer-friendly error if a child subcomponent is rendered outside <Tabs>.
+ */
 const useTabsContext = () => {
   const context = useContext(TabsContext)
   if (!context)
@@ -36,24 +48,35 @@ const useTabsContext = () => {
 /* ROOT CONTAINER (<Tabs>)                                                    */
 /* -------------------------------------------------------------------------- */
 type TabsVariantProps = {
+  /** Visual variation theme */
   variant?: TabsListVariantsType['variant']
+  /** Layout orientation. When 'vertical', applies flex columns. */
   orientation?: TabsListVariantsType['orientation']
+  /** Size density scale */
   size?: 'sm' | 'md' | 'lg'
 }
 
 export type TabsProps = Prettify<
   React.HTMLAttributes<HTMLDivElement> & {
+    /** The default active tab for uncontrolled usage */
     defaultValue?: string
+    /** The controlled active tab value */
     value?: string
-    onValueChange?: (value: string) => void
+    /** Callback triggered when a new tab is selected */
+    onTabChange?: (tab: string) => void
   } & TabsVariantProps
 >
 
+/**
+ * Tabs Component
+ * The root orchestration layer. Manages active tab state (controlled or uncontrolled)
+ * and exposes theme context to its layout descendants.
+ */
 export const Tabs = forwardRef<HTMLDivElement, TabsProps>((props, ref) => {
   const {
-    defaultValue,
-    value,
-    onValueChange,
+    defaultValue: defaultTab,
+    value: controlledTab,
+    onTabChange,
     variant = 'underline',
     orientation = 'horizontal',
     size = 'md',
@@ -62,19 +85,23 @@ export const Tabs = forwardRef<HTMLDivElement, TabsProps>((props, ref) => {
     ...rest
   } = props
 
-  const [internalValue, setInternalValue] = useState(defaultValue || '')
-  const activeValue = value !== undefined ? value : internalValue
+  // Uncontrolled state: tracks the active tab locally when not controlled by parent
+  const [selectedTabState, setSelectedTabState] = useState(defaultTab || '')
 
-  const handleValueChange = (newValue: string) => {
-    setInternalValue(newValue)
-    if (onValueChange) onValueChange(newValue)
+  // Resolves the active tab (controlled prop takes priority over local state)
+  const activeTab =
+    controlledTab !== undefined ? controlledTab : selectedTabState
+
+  const handleTabChange = (newTab: string) => {
+    setSelectedTabState(newTab)
+    if (onTabChange) onTabChange(newTab)
   }
 
   return (
     <TabsContext.Provider
       value={{
-        activeValue,
-        onValueChange: handleValueChange,
+        activeTab,
+        onTabChange: handleTabChange,
         variant,
         orientation,
         size,
@@ -100,11 +127,16 @@ Tabs.displayName = 'Tabs'
 /* -------------------------------------------------------------------------- */
 /* TABS LIST (<TabsList>) - The Track                                         */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * TabsList Component
+ * Acts as the track container for `<TabsTrigger>` buttons. Extends the `<Stack>` primitive
+ * to handle trigger layout, orientation direction, and layout gaps dynamically.
+ */
 export const TabsList = forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >((props, ref) => {
-  // STAFF FIX: Explicitly destructure 'children' from props
   const { className, children, ...rest } = props
   const { variant, orientation } = useTabsContext()
   const resolvedOrientation = orientation ?? 'horizontal'
@@ -142,18 +174,26 @@ TabsList.displayName = 'TabsList'
 /* -------------------------------------------------------------------------- */
 export type TabsTriggerProps = Prettify<
   Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'color'> & {
+    /** The matching value this trigger represents. Activates the corresponding <TabsContent>. */
     value: string
+    /** Optional starting icon node */
     startIcon?: React.ReactNode // We can now pass icons directly because Button supports it!
   }
 >
 
+/**
+ * TabsTrigger Component
+ * The interactive tab selector button. Inherits size and style from parent context
+ * and extends the polymorphic `<Button>` primitive to support accessibility roles, active states,
+ * and icons natively.
+ */
 export const TabsTrigger = forwardRef<HTMLButtonElement, TabsTriggerProps>(
   (props, ref) => {
     const { className, value, disabled, children, startIcon, ...rest } = props
-    const { activeValue, onValueChange, variant, orientation, size } =
+    const { activeTab, onTabChange, variant, orientation, size } =
       useTabsContext()
 
-    const isActive = activeValue === value
+    const isActive = activeTab === value
     const triggerColor: 'primary' | 'secondary' = isActive
       ? 'primary'
       : 'secondary'
@@ -165,10 +205,10 @@ export const TabsTrigger = forwardRef<HTMLButtonElement, TabsTriggerProps>(
         role="tab"
         aria-selected={isActive}
         disabled={disabled}
-        onClick={() => onValueChange(value)}
+        onClick={() => onTabChange(value)}
         // 1. Base variant is ghost so it inherits your standard hover rules
         variant="ghost"
-        // 2. Inherits the size frongm the parent Tabs context
+        // 2. Inherits the size from the parent Tabs context
         size={size}
         // 3. Dynamic color mapping! No CSS text colors needed.
         color={triggerColor}
@@ -194,16 +234,23 @@ TabsTrigger.displayName = 'TabsTrigger'
 /* -------------------------------------------------------------------------- */
 export type TabsContentProps = Prettify<
   React.HTMLAttributes<HTMLDivElement> & {
+    /** The identifier value of this panel. Renders children only when this equals active tab value. */
     value: string
   }
 >
 
+/**
+ * TabsContent Component
+ * Represents the display panel (tabpanel) that conditionally renders when its value matches
+ * the currently selected tab trigger value.
+ */
 export const TabsContent = forwardRef<HTMLDivElement, TabsContentProps>(
   (props, ref) => {
     const { className, value, children, ...rest } = props
-    const { activeValue } = useTabsContext()
+    const { activeTab } = useTabsContext()
 
-    if (activeValue !== value) return null
+    // Performance optimization: Render nothing if this tab is inactive
+    if (activeTab !== value) return null
 
     return (
       // STAFF FIX: Using Box for the panel container
@@ -213,7 +260,7 @@ export const TabsContent = forwardRef<HTMLDivElement, TabsContentProps>(
         role="tabpanel"
         tabIndex={0}
         className={cn(
-          'mt-l focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focused',
+          'mt-l focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focused border-0',
           className
         )}
         {...rest}
