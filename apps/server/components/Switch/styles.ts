@@ -7,7 +7,7 @@ export const switchVariants = cva(
     'rounded-pill',
     'transition-all',
     'animate-duration-fast',
-    'border border-transparent',
+    'border-2 border-transparent',
     'focus:ring-2 focus:ring-border-focused focus:outline-none',
   ],
   {

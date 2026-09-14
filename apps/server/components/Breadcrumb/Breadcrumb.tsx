@@ -9,31 +9,30 @@ import { ChevronRight } from 'lucide-react'
 
 type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
-/*
-    trasform: pull or push the image near to farther away.
-    scale: makes the size of thing bigger.
-*/
-
 /* -------------------------------------------------------------------------- */
-/* CONTEXT (The Secret to Compound Components)                                */
+/* CONTEXT (Context-based Variant Propagation)                                */
 /* -------------------------------------------------------------------------- */
 type BreadcrumbContextValue = {
   variant?: BreadcrumbLinkVariantsType['variant']
   size?: BreadcrumbLinkVariantsType['size']
 }
+
 const BreadcrumbContext = createContext<BreadcrumbContextValue>({
   variant: 'default',
   size: 'md',
 })
 
 /* -------------------------------------------------------------------------- */
-/* BREADCRUMB CONTAINER                                                       */
+/* BREADCRUMB CONTAINER (<Breadcrumb>)                                        */
 /* -------------------------------------------------------------------------- */
-//aria-label: screen readers and accessibility.
 type BreadcrumbProps = Prettify<
   React.HTMLAttributes<HTMLElement> & BreadcrumbContextValue
 >
 
+/**
+ * Breadcrumb Wrapper: Renders a semantic navigation landmark wrapper.
+ * Propagates variant and size configs to child links using a Context Provider.
+ */
 export const Breadcrumb = forwardRef<HTMLElement, BreadcrumbProps>(
   (props, ref) => {
     const {
@@ -45,9 +44,10 @@ export const Breadcrumb = forwardRef<HTMLElement, BreadcrumbProps>(
     } = props
 
     return (
-      // We wrap the children in the context provider
       <BreadcrumbContext.Provider value={{ variant, size }}>
+        {/* semantic <nav> element with aria-label identifies this landmark to screen readers */}
         <nav ref={ref} aria-label="breadcrumb" className={className} {...rest}>
+          {/* Ordered list groups sequential navigational segments */}
           <ol className={cn(breadcrumbContainerVariants({ size }))}>
             {children}
           </ol>
@@ -56,14 +56,17 @@ export const Breadcrumb = forwardRef<HTMLElement, BreadcrumbProps>(
     )
   }
 )
-// for React Developer Tools and debugging clarity
 Breadcrumb.displayName = 'Breadcrumb'
 
 /* -------------------------------------------------------------------------- */
-/* BREADCRUMB ITEM (Wrapper for each segment)                                 */
+/* BREADCRUMB ITEM (<BreadcrumbItem>)                                         */
 /* -------------------------------------------------------------------------- */
 export type BreadcrumbItemProps = React.HTMLAttributes<HTMLLIElement>
 
+/**
+ * BreadcrumbItem: A wrapper for individual breadcrumb nodes.
+ * Renders a list item (`<li>`) inside the parent `<ol>`.
+ */
 export const BreadcrumbItem = forwardRef<HTMLLIElement, BreadcrumbItemProps>(
   (props, ref) => {
     const { className, ...rest } = props
@@ -79,33 +82,35 @@ export const BreadcrumbItem = forwardRef<HTMLLIElement, BreadcrumbItemProps>(
 BreadcrumbItem.displayName = 'BreadcrumbItem'
 
 /* -------------------------------------------------------------------------- */
-/* BREADCRUMB LINK (The clickable path elements)                              */
+/* BREADCRUMB LINK (<BreadcrumbLink>)                                         */
 /* -------------------------------------------------------------------------- */
-// isCurrentPage: this tab contains a link or not.
 type BreadcrumbLinkProps = React.AnchorHTMLAttributes<HTMLElement> & {
+  /** Mark as the active/current page. Replaces link with a span element. */
   isCurrentPage?: boolean
+  /** Custom wrapper component override (e.g. Next.js Link, React Router Link) */
   as?: React.ElementType
-  to?: string // Support for React Router
+  /** Router pathway link target (e.g., for React Router Link) */
+  to?: string
 }
 
 /*
 we are providing two ways to enter a link prop:
     1. href (Native HTML / Next.js)
     2. to (React Router)
-*/
+ */
 export const BreadcrumbLink = forwardRef<HTMLElement, BreadcrumbLinkProps>(
   (props, ref) => {
     const {
       className,
       isCurrentPage = false,
-      as: Component, // Removed default 'a' to dynamically calculate the correct tag
+      as: Component,
       to,
       href,
       children,
       ...rest
     } = props
 
-    // Consume the context so we know what size/variant we are
+    // Consume parent styling variants from Context
     const { variant, size } = useContext(BreadcrumbContext)
 
     /* 
@@ -124,14 +129,9 @@ export const BreadcrumbLink = forwardRef<HTMLElement, BreadcrumbLinkProps>(
     */
     const routingProps: Record<string, unknown> = {}
 
-    // 2. the component is anchor then use href.
     if (FinalComponent === 'a') {
       routingProps.href = href || to
-    }
-
-    // if component is something else then check "to" first.
-    else if (FinalComponent !== 'span') {
-      // link could be in herf ro to.
+    } else if (FinalComponent !== 'span') {
       if (to) routingProps.to = to
       if (href) routingProps.href = href
     }
@@ -139,6 +139,7 @@ export const BreadcrumbLink = forwardRef<HTMLElement, BreadcrumbLinkProps>(
     return (
       <FinalComponent
         ref={ref}
+        // Identifies the active page within the navigation chain to screen readers
         aria-current={isCurrentPage ? 'page' : undefined}
         className={cn(
           breadcrumbLinkVariants({ variant, size, isCurrentPage }),
@@ -155,10 +156,14 @@ export const BreadcrumbLink = forwardRef<HTMLElement, BreadcrumbLinkProps>(
 BreadcrumbLink.displayName = 'BreadcrumbLink'
 
 /* -------------------------------------------------------------------------- */
-/* BREADCRUMB SEPARATOR (The static connector)                                */
+/* BREADCRUMB SEPARATOR (<BreadcrumbSeparator>)                               */
 /* -------------------------------------------------------------------------- */
 export type BreadcrumbSeparatorProps = React.HTMLAttributes<HTMLSpanElement>
 
+/**
+ * BreadcrumbSeparator: Decorative separator character or icon placed between segments.
+ * Explicitly hidden from assistive technologies.
+ */
 export const BreadcrumbSeparator = forwardRef<
   HTMLSpanElement,
   BreadcrumbSeparatorProps
@@ -169,9 +174,9 @@ export const BreadcrumbSeparator = forwardRef<
   return (
     <span
       ref={ref}
+      // role="presentation" & aria-hidden="true" instruct screen readers to ignore the element
       role="presentation"
       aria-hidden="true"
-      // dynamically handling the size of separator.
       className={cn(
         'text-fg-tertiary flex items-center justify-center select-none',
         size === 'sm'

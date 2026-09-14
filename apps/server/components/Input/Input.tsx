@@ -29,6 +29,7 @@ export function Input(props: InputProps): React.ReactElement {
         </div>
       )}
       <input
+        aria-invalid={!!error}
         className={cn(
           inputVariants({ variant, size }),
           error && 'border-status-danger focus:border-status-danger',
