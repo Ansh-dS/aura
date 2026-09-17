@@ -1,3 +1,4 @@
+// used when '<head>' or layout file doesnt' exist.
 export const layoutHtml = (
   defaultTheme: string
 ) => `import type { ReactNode } from 'react'
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 }
 `
 
+// use when you have '<head>'.
 export const nextInjectionScript = (defaultTheme: string) => `
         {/* FIX: THE NO-BLINK SCRIPT */}
         <script

@@ -40,6 +40,7 @@ export async function askUserQuestions(): Promise<Answers> {
   }
 }
 
+// return array of selected themes or ['tally'] from 'answers' given by user.
 export function normalizeSelectedThemes(answers: Answers): string[] {
   if (answers.selectedThemes && answers.selectedThemes.length > 0) {
     return answers.selectedThemes

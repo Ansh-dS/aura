@@ -1,6 +1,6 @@
 import path from 'path'
 import { readdir, access, constants, writeFile } from 'fs/promises'
-import stringCss from './stringCss.js'
+import stringCss from './generateCssInStringType.js'
 import { DesignSystem } from '../tokenDefinition.js'
 import { pathToFileURL } from 'url'
 import { mkdirSync } from 'fs'
@@ -8,8 +8,13 @@ import { mkdirSync } from 'fs'
 const packageRoot = process.cwd()
 const workspaceRoot = path.resolve(packageRoot, '..', '..') // resolve: takes sequence of path and return absolute path.
 
+/**
+ * 1. createCssFile
+ * Compiles a design token object into a flattened CSS variable string
+ * and writes the compiled CSS stylesheet to the server's public theme assets.
+ */
 async function createCssFile(
-  designToken: DesignSystem,
+  themeContent: DesignSystem,
   themeName: string
 ): Promise<void> {
   //  file saves with a .css extension
@@ -19,14 +24,14 @@ async function createCssFile(
     `${themeName}.css`
   )
 
-  const token = stringCss(designToken, themeName)
+  const css = stringCss(themeContent, themeName)
 
   try {
     //  Ensuring the directory exists before trying to write to it
     mkdirSync(path.dirname(createCssHere), { recursive: true })
 
     // writeFile is async where as writeFileSync is synchronous.
-    await writeFile(createCssHere, token, 'utf-8')
+    await writeFile(createCssHere, css, 'utf-8')
     console.log(`Created successfully ${createCssHere}`)
   } catch (err) {
     console.log(err)
@@ -34,6 +39,12 @@ async function createCssFile(
   }
 }
 
+/**
+ * 2. processTokensFolder
+ * Reads all files from the chosen tokens folder, filters out declaration files(as we are reading from dist folder.),
+ * normalizes theme names (deduplicating base vs suffix names), dynamically imports
+ * each module, and initiates the CSS file compilation.
+ */
 async function processTokensFolder(
   folderPath: string,
   allowTs: boolean = false
@@ -43,12 +54,15 @@ async function processTokensFolder(
     // { withFileTypes: true }: provides metadata, so we can directly check whether it’s a file, directory, symbolic link
     const entries = await readdir(folderPath, { withFileTypes: true })
 
-    // Filter only files (skip directories) and ignore TypeScript declaration files
-    const files = entries.filter(
-      (entry) => entry.isFile() && !entry.name.endsWith('.d.ts')
-    )
+    // Filter only target theme files based on allowTs flag (excluding directories/readme)
+    const files = entries.filter((entry) => {
+      if (!entry.isFile()) return false
+      return allowTs
+        ? entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')
+        : entry.name.endsWith('.js')
+    })
 
-    // Build a map of normalized theme names -> chosen file
+    // Build a map of normalized theme names -> {file destination(Path), file name information }
     // Normalization: strip a trailing `Theme` suffix (case-insensitive).
     // When both `foo.js` and `fooTheme.js` exist, prefer the base `foo.js` file.
     const fileMap = new Map<
@@ -58,9 +72,10 @@ async function processTokensFolder(
 
     files.forEach((file) => {
       const fullPath = path.join(folderPath, file.name)
-      const ext = path.extname(file.name)
+      const ext = path.extname(file.name) // returns extention of the file.
       const base = path.basename(file.name, ext)
       const normalized = base.replace(/Theme$/i, '')
+      // checks weather base ends with 'theme' or not.
       const isTheme = /Theme$/i.test(base)
 
       const existing = fileMap.get(normalized)
@@ -77,7 +92,7 @@ async function processTokensFolder(
 
     // Process the selected unique files
     await Promise.all(
-      Array.from(fileMap.values()).map(async (entry) => {
+      Array.from(fileMap.entries()).map(async ([themeName, entry]) => {
         const fullPath = entry.fullPath
         const ext = path.extname(fullPath)
 
@@ -85,9 +100,6 @@ async function processTokensFolder(
           try {
             const tokenModule = await import(pathToFileURL(fullPath).href)
             const jsonToken = tokenModule?.default ?? tokenModule
-            const themeName = path
-              .basename(entry.origName, ext)
-              .replace(/Theme$/i, '')
 
             if (jsonToken) {
               await createCssFile(jsonToken, themeName)
@@ -108,6 +120,12 @@ async function processTokensFolder(
   }
 }
 
+/**
+ * 3. generateCssFiles
+ * The entry orchestrator function. Checks if compiled tokens (in dist) or
+ * source tokens (in src) are available, selects the target path, and triggers
+ * the folder processing to generate the CSS files.
+ */
 async function generateCssFiles() {
   const distTokensPath = path.join(packageRoot, 'dist/src/tokens')
   const srcTokensPath = path.join(packageRoot, 'src/tokens')
@@ -115,22 +133,20 @@ async function generateCssFiles() {
   let selectedPath: string | null = null
   let allowTs = false
 
+  // finding correct selectedPath out of dist and tokens and to allow '.ts' files or not
   try {
     // access and contants: checks does the file exists or not.
     await access(distTokensPath, constants.F_OK)
     selectedPath = distTokensPath
-    allowTs = true // compiled dist may contain .js and .d.ts; allow both .js and .ts if using ESM loader
+    allowTs = false // compiled dist contains only .js files (and .d.ts files)
     console.log('Using tokens from dist:', distTokensPath)
   } catch {
     try {
       console.log('not taking dist path')
       await access(srcTokensPath, constants.F_OK)
       selectedPath = srcTokensPath
-      allowTs = false // when running Node directly against source, only .js imports are supported
-      console.log(
-        'Using tokens from src (only .js files will be imported):',
-        srcTokensPath
-      )
+      allowTs = true // source folder contains .ts files
+      console.log('Using tokens from src:', srcTokensPath)
     } catch {
       console.error('No tokens folder found in dist or src')
       console.log(

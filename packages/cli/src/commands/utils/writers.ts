@@ -15,7 +15,8 @@ export async function writeConfig(cwd: string, selectedThemes: string[]) {
   })
 }
 
-export async function writeInitFiles(
+// setup files.
+export async function writeSetupFiles(
   componentsBaseDir: string, // Now points to src/components/
   targetDir: string,
   userCssFileName: string,
@@ -30,6 +31,7 @@ export async function writeInitFiles(
   }
 
   // 2. Inject CSS safely (Now targeting core/styles/index.css)
+  // Relative calculates a relative path from path1 to second.
   const userCssPath = path.join(targetDir, userCssFileName)
   const relativePathToStyles = path.relative(
     targetDir,
@@ -76,6 +78,10 @@ export async function injectNoBlink(
     'layout.js',
   ]
 
+  // if found '<head>' then write the inside content.
+  // how are inserting other string inside old.
+  // find the starting index using 'indexOf'
+  // slicing content from '0-indexAt' + 'new content' + 'indexAt-end'.
   for (const name of layoutCandidates) {
     const p = path.join(targetDir, name)
     if (await fs.pathExists(p)) {

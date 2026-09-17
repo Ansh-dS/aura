@@ -69,16 +69,6 @@ export default function stringCss(
   const lightVal = tokenObj?.modes?.light ?? {}
   const darkVal = tokenObj?.modes?.dark ?? {}
 
-  // Helper function to build formatted CSS rule declarations cleanly
-  const buildSection = (selector: string, tokens: object) => {
-    const rules = flattenTokens(tokens)
-      .map(
-        ([name, val]) => `  ${name.startsWith('-') ? '' : '--'}${name}: ${val};`
-      )
-      .join('\n')
-    return `${selector} {\n${rules}${rules ? '\n' : ''}}\n`
-  }
-
   // reverting the back output into json object.
   return (
     buildSection(`:root[data-theme-name="${themeName}"]`, commonVal) +
@@ -91,4 +81,14 @@ export default function stringCss(
       darkVal
     )
   )
+}
+
+// Helper function to build formatted CSS rule declarations cleanly
+function buildSection(selector: string, tokens: object): string {
+  const rules = flattenTokens(tokens)
+    .map(
+      ([name, val]) => `  ${name.startsWith('-') ? '' : '--'}${name}: ${val};`
+    )
+    .join('\n')
+  return `${selector} {\n${rules}${rules ? '\n' : ''}}\n`
 }
