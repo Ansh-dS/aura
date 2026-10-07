@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+} from 'react'
 import { popoverVariants, PopoverVariantsType } from './styles'
 import { cn } from '../Utils/utils'
 
@@ -6,122 +12,153 @@ type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
 
+/**
+ * Custom props specific to the Popover component.
+ */
 type PopoverCustomProps = {
-  content: React.ReactNode /** The content rendered inside the floating popover */
-  open?: boolean /** Controlled state: Forces the popover to remain open or closed */
-  initialState?: boolean /** Uncontrolled state: we aren't forcing to open or close but providing default value */
-  onOpenChange?: (
-    open: boolean
-  ) => void /** the event emitted when closes or opens */
-  closeOnOutsideClick?: boolean /** 'click-away' functionality to close the panel */
+  /** The content rendered inside the floating popover panel */
+  content: React.ReactNode
+  /** Controlled state: Forces the popover to remain open or closed from a parent component */
+  open?: boolean
+  /** Uncontrolled state: Initial open/closed status when no controlled 'open' prop is provided */
+  defaultOpen?: boolean
+  /** Event callback fired when the popover toggles open or closed */
+  onToggle?: (isOpen: boolean) => void
+  /** Enables or disables auto-closing the popover when clicking outside the component boundary */
+  closeOnOutsideClick?: boolean
 }
 
+/**
+ * Combination of custom popover props and CVA variant props.
+ */
 type CleanProps = Prettify<PopoverCustomProps & PopoverVariantsType>
 
+/**
+ * PopoverProps extends standard HTML Div attributes while excluding 'content' to avoid prop collisions.
+ */
 export type PopoverProps = CleanProps &
   Omit<React.HTMLAttributes<HTMLDivElement>, 'content'>
 
-export function Popover(props: PopoverProps): React.ReactElement {
-  const {
-    content,
-    children,
-    align,
-    variant,
-    open: controlledState,
-    initialState = false,
-    onOpenChange,
-    closeOnOutsideClick = true, // we are asking weather we want to make this feature avail to person or not.
-    className,
-    ...rest
-  } = props
+/**
+ * Popover Component
+ *
+ * A floating container component that displays contextual content when a trigger element is clicked.
+ * Features:
+ * - Controlled (`open`) and Uncontrolled (`defaultOpen`) state patterns
+ * - Click-outside to close auto-dismissal
+ * - Full Keyboard & ARIA accessibility support (`Enter`/`Space` triggers, `role="button"`, `role="dialog"`)
+ */
+export const Popover = forwardRef<HTMLDivElement, PopoverProps>(
+  (props, ref) => {
+    const {
+      content,
+      children,
+      align,
+      variant,
+      open: openProp,
+      defaultOpen = false,
+      onToggle,
+      closeOnOutsideClick = true,
+      className,
+      ...rest
+    } = props
 
-  // internalState: Tracks the toggle status when no 'open' prop is provided.
-  // isVisible: The computed source of truth (Controlled vs. Uncontrolled pattern)
-  // anchorRef: Reference to the main container to detect boundary-crossing clicks
-  const [internalState, setInternalState] = useState(initialState)
-  const isVisible =
-    controlledState == undefined ? internalState : controlledState
-  const anchorRef = useRef<HTMLDivElement>(null)
+    // STATE MANAGEMENT (Controlled vs. Uncontrolled Pattern):
+    // 1. 'isOpenState' manages toggle state locally when 'open' prop is not passed.
+    // 2. 'isOpen' computes the actual source of truth (uses 'openProp' if defined, otherwise falls back to 'isOpenState').
+    const [isOpenState, setIsOpenState] = useState(defaultOpen)
+    const isOpen = openProp === undefined ? isOpenState : openProp
 
-  /** Handles state updates and fires external callbacks */
-  const toggleVisibility = (nextState: boolean) => {
-    setInternalState(nextState)
-    if (onOpenChange) onOpenChange(nextState)
-  }
+    // Ref attached to the main anchor element to detect boundary-crossing click events.
+    const anchorRef = useRef<HTMLDivElement>(null)
 
-  // it's handelling the outside click.
-  useEffect(() => {
-    // before closing check pop-over opened or not.
-    // if not visible then gets true.
-    // if clicking outside feature not available.
-    if (!closeOnOutsideClick || !isVisible) return
+    // Expose the internal anchorRef to external callers passing a forwarded ref
+    useImperativeHandle(ref, () => anchorRef.current as HTMLDivElement)
 
-    // 1. pop-over is open.
-    // 2. outside click is avaiable
-    // so 'event' means mouseEvent.
-
-    // if the user clicked outside our anchor boundary then change the states.
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (
-        anchorRef.current &&
-        !anchorRef.current.contains(event.target as Node)
-      ) {
-        // manages other states.
-        toggleVisibility(false)
-      }
+    /**
+     * Helper function to update internal state and fire the optional 'onToggle' callback.
+     */
+    const handleToggle = (nextState: boolean) => {
+      setIsOpenState(nextState)
+      if (onToggle) onToggle(nextState)
     }
 
-    // mousedown: listens to the mouse clicks over the whole page.
-    // if clicked handleOutsideClick exectues.
-    document.addEventListener('mousedown', handleOutsideClick)
-    return () => document.removeEventListener('mousedown', handleOutsideClick)
-    // we remove the listner when we close the pop-over.
-    // so function doesn't executes again.
-  }, [closeOnOutsideClick, isVisible, onOpenChange])
+    /**
+     * CLICK-OUTSIDE HANDLER HOOK:
+     * Attaches a global 'mousedown' event listener to the document when the popover is open.
+     * If the user clicks anywhere outside the 'anchorRef' boundary, the popover automatically closes.
+     */
+    useEffect(() => {
+      // If click-outside is disabled or the popover is closed, no event listener is needed.
+      if (!closeOnOutsideClick || !isOpen) return
 
-  // relative: Defines the position of the inside children.
-  // inline-block:
-  //      a. our current element takes up that much space which their children takes (like span):
-  //            so arranges the elements side-by-side.
-  //      b. but you still can change their hieght and weidth(like div)
-  // cursor-pointer: makes your cursor looks like hand to let use know it is interactive or clickable.
-  return (
-    <div className="relative inline-block cursor-progress" ref={anchorRef}>
-      {/* Using div to avoid button-in-button errors, but keeping accessibility */}
-      {/* we are inheriting the cursor... to reach this property to children 
-          when we use inline-block parent redues it's size to child so it always behind the child and we hover we can't see 'hand' from cursor progress.
-          using 'inherit' we are open the pipeline to reach 'cursor' to the child and child's child and so on. 
-          */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-expanded={isVisible}
-        aria-haspopup="true"
-        onClick={() => toggleVisibility(!isVisible)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            toggleVisibility(!isVisible)
-          }
-        }}
-        className="inline-block cursor-inherit"
-      >
-        {children}
-      </div>
+      const handleOutsideClick = (event: MouseEvent) => {
+        // Check if the click occurred outside the anchor element's DOM hierarchy
+        if (
+          anchorRef.current &&
+          !anchorRef.current.contains(event.target as Node)
+        ) {
+          handleToggle(false)
+        }
+      }
 
-      {/* Floating Panel */}
-      {isVisible && (
+      // Attach global listener when popover opens
+      document.addEventListener('mousedown', handleOutsideClick)
+
+      // Cleanup function: Removes the listener when popover closes or component unmounts to prevent memory leaks
+      return () => document.removeEventListener('mousedown', handleOutsideClick)
+    }, [closeOnOutsideClick, isOpen, onToggle])
+
+    return (
+      // Outer Container:
+      // 'relative' ensures the floating popover panel positions relative to this anchor box.
+      // 'inline-block' wraps around the trigger child content.
+      <div className="relative inline-block cursor-pointer" ref={anchorRef}>
+        {/* 
+          Trigger Element Wrapper:
+          - Uses role="button" & tabIndex={0} for semantic accessibility without nesting native <button> elements.
+          - Supports both mouse click and keyboard activation (Enter / Space keys).
+          - 'cursor-inherit' passes the cursor style down to child elements.
+        */}
         <div
-          className={cn(
-            popoverVariants({ align, variant }),
-            'mt-2 top-full',
-            className
-          )}
-          {...rest}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOpen}
+          aria-haspopup="true"
+          onClick={() => handleToggle(!isOpen)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleToggle(!isOpen)
+            }
+          }}
+          className="inline-block cursor-inherit"
         >
-          {content}
+          {children}
         </div>
-      )}
-    </div>
-  )
-}
+
+        {/* 
+          Floating Popover Panel:
+          - Rendered conditionally only when 'isOpen' is true.
+          - Applies alignment and style variants generated via 'popoverVariants'.
+          - Marked with role="dialog" for screen readers.
+        */}
+        {isOpen && (
+          <div
+            role="dialog"
+            className={cn(
+              popoverVariants({ align, variant }),
+              'mt-2 top-full',
+              className
+            )}
+            {...rest}
+          >
+            {content}
+          </div>
+        )}
+      </div>
+    )
+  }
+)
+
+Popover.displayName = 'Popover'

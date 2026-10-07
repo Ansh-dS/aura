@@ -3,6 +3,7 @@ import path from 'path'
 import { NextResponse } from 'next/server.js'
 import registryIndex from '@registry'
 
+// increases the starting charcter of each string/component to uppercase.
 function toPascalCase(componentName: string) {
   return componentName
     .trim()
@@ -13,17 +14,34 @@ function toPascalCase(componentName: string) {
     .join('')
 }
 
+export interface RegistryFile {
+  path: string // e.g., "Button/Button.tsx"
+  name: string
+  content: string // The actual data.
+}
+
+export interface RegistryResponse {
+  name: string
+  packageDependencies: string[]
+  componentsDependencies: string[]
+  files: RegistryFile[]
+}
+
+export interface ErrorResponse {
+  error: string
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ component: string }> }
-) {
+): Promise<NextResponse<RegistryResponse | ErrorResponse>> {
   const resolvedParams = await params
   const componentName = resolvedParams.component.toLowerCase()
   const folderName = toPascalCase(componentName)
-  const meta = registryIndex[componentName]
+  const meta = registryIndex[componentName] // {packages needed , other comoponent needed to run current component. }
 
   if (!meta) {
-    return NextResponse.json(
+    return NextResponse.json<ErrorResponse>(
       { error: `Component '${componentName}' not found in registry.` },
       { status: 404 }
     )
@@ -31,8 +49,9 @@ export async function GET(
 
   try {
     const componentPath = path.join(process.cwd(), 'components', folderName)
-    const files = []
+    const files: RegistryFile[] = []
 
+    // Entiries have styles.css file and componentName.tsx file.
     const entries = await fs.readdir(componentPath, { withFileTypes: true })
 
     for (const entry of entries) {
@@ -40,6 +59,7 @@ export async function GET(
         const filePath = path.join(componentPath, entry.name)
         const content = await fs.readFile(filePath, 'utf8')
 
+        //
         files.push({
           path: path.join(folderName, entry.name), // e.g., "Button/Button.tsx"
           name: entry.name,
@@ -49,15 +69,15 @@ export async function GET(
     }
 
     // Return the specific files AND the instructions on what other internal components are required
-    return NextResponse.json({
+    return NextResponse.json<RegistryResponse>({
       name: componentName,
-      dependencies: meta.dependencies,
-      registryDependencies: meta.registryDependencies || [], // Hand relationship tracking down to CLI
+      packageDependencies: meta.packageDependencies,
+      componentsDependencies: meta.componentsDependencies || [], // Hand relationship tracking down to CLI
       files,
     })
   } catch (error) {
     console.error(`Registry engine error for ${folderName}:`, error)
-    return NextResponse.json(
+    return NextResponse.json<ErrorResponse>(
       { error: `Failed to assemble assets for ${folderName}.` },
       { status: 500 }
     )

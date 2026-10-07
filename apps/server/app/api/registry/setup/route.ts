@@ -2,7 +2,24 @@ import { NextResponse } from 'next/server.js'
 import fs from 'fs/promises'
 import path from 'path'
 
-export async function GET(request: Request) {
+export interface SetupFile {
+  name: string
+  content: string
+}
+
+export interface SetupResponse {
+  packageDependencies: string[]
+  files: SetupFile[]
+}
+
+export interface SetupErrorResponse {
+  error: string
+}
+
+// Return files(name, content) and needed packageDependencies.
+export async function GET(
+  request: Request
+): Promise<NextResponse<SetupResponse | SetupErrorResponse>> {
   const url = new URL(request.url)
   const themeQuery = url.searchParams.get('themes') || 'tally'
   const selectedThemes = themeQuery.split(',')
@@ -17,7 +34,7 @@ export async function GET(request: Request) {
       'utils.ts'
     ) // Path to your utils
 
-    const files: Array<{ name: string; content: string }> = []
+    const files: SetupFile[] = []
     let indexCssContent = ''
 
     // 1. Process Themes (Targeting the 'core/' folder)
@@ -37,6 +54,7 @@ export async function GET(request: Request) {
     )
     files.push({ name: 'core/styles/global.css', content: globalCss })
     indexCssContent += `@import './global.css';\n`
+
     // 3. Process the Theme Engine
     const themeProviderContent = await fs.readFile(
       path.join(coreDir, 'useTheme.tsx'),
@@ -57,14 +75,14 @@ export async function GET(request: Request) {
     files.push({ name: 'core/styles/base.css', content: baseCss })
     files.push({ name: 'core/styles/index.css', content: indexCssContent })
 
-    return NextResponse.json({
+    return NextResponse.json<SetupResponse>({
       // We must install these so the utils.ts file doesn't crash the user's app!
-      dependencies: ['clsx', 'tailwind-merge'],
+      packageDependencies: ['clsx', 'tailwind-merge'],
       files: files,
     })
   } catch (error) {
     console.error('Init API Error:', error)
-    return NextResponse.json(
+    return NextResponse.json<SetupErrorResponse>(
       { error: 'Failed to assemble init files' },
       { status: 500 }
     )

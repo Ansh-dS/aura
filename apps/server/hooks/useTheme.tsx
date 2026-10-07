@@ -8,7 +8,6 @@ import React, {
   useCallback,
 } from 'react'
 
-// state variable made using useState have the same names.
 interface ThemeContextType {
   theme: string
   mode: string
@@ -16,12 +15,19 @@ interface ThemeContextType {
   setMode: (mode: string) => void
 }
 
-// createContext is to avoid the prop drilling.
-// here useContext is to use the value of the things defined.
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-// changes the themeName and mode in localStorage.
-// takes a children and return it after executing the above code and broadcasting happens
+// applyWithTransition: Wraps state updates in the javascript Transition API for smooth visual crossfades
+const applyWithTransition = (cb: () => void) => {
+  // If document.startViewTransition doesn't exists=> run the function immdiately, else pass hte callback(changes states) function to it.
+  if (!document.startViewTransition) {
+    cb()
+    return
+  }
+  document.startViewTransition(cb)
+}
+
+// ThemeProvider: Wrapper component that manages theme/mode states and broadcasts them down the tree
 export const ThemeProvider = ({
   children,
   defaultTheme = 'tally',
@@ -31,12 +37,11 @@ export const ThemeProvider = ({
   defaultTheme?: string
   defaultMode?: string
 }) => {
-  // 1. MUST match the server exactly to pass hydration. No localStorage here!
+  // Server-safe initial states to prevent hydration mismatch
   const [theme, setThemeState] = useState(defaultTheme)
   const [mode, setModeState] = useState(defaultMode)
 
-  // run only at mount
-  // when user refreshes the page, sync with the browser safely AFTER hydration finishes.
+  // Sync state with localStorage on mount (after hydration)
   useEffect(() => {
     const savedTheme = localStorage.getItem('data-theme-name')
     const savedMode = localStorage.getItem('data-mode')
@@ -58,30 +63,19 @@ export const ThemeProvider = ({
     }
   }, [defaultTheme, defaultMode])
 
-  /**
-   * INTERNAL HELPER: applyWithTransition
-   * This handles the buttery-smooth crossfade.
-   * It fulfills the goal of high-performance interactions with zero dependencies.
-   */
-  const applyWithTransition = (cb: () => void) => {
-    if (!document.startViewTransition) {
-      cb()
-      return
-    }
-    document.startViewTransition(cb)
-  }
-
-  // specialized setter functions.
-  // so we make changes in the html variable name, state variable values, and localStorage.
+  // setTheme: Updates theme state, sets the HTML attribute, and persists it to localStorage
   const setTheme = useCallback((newTheme: string) => {
     applyWithTransition(() => {
+      // we are changing all three things.
       setThemeState(newTheme)
       document.documentElement.setAttribute('data-theme-name', newTheme)
       localStorage.setItem('data-theme-name', newTheme)
     })
   }, [])
 
+  // setMode: Updates mode (light/dark) state, sets the HTML attribute, and persists it to localStorage
   const setMode = useCallback((newMode: string) => {
+    //document.startViewTransition: helps in crossfadding things smoothly.
     applyWithTransition(() => {
       setModeState(newMode)
       document.documentElement.setAttribute('data-mode', newMode)
@@ -89,7 +83,6 @@ export const ThemeProvider = ({
     })
   }, [])
 
-  // themeContext.Provider broadcast the values to all the other components.
   return (
     <ThemeContext.Provider value={{ theme, mode, setTheme, setMode }}>
       {children}
@@ -97,7 +90,7 @@ export const ThemeProvider = ({
   )
 }
 
-// Custom Hook: so developer can able to fetch the broadcasted value.
+// useTheme: Custom hook allowing consumer components to access the active theme and mode context
 export const useTheme = () => {
   const context = useContext(ThemeContext)
   if (!context) {
