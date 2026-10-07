@@ -3,7 +3,17 @@ import fs from 'fs-extra'
 import path from 'path'
 import { execSync } from 'child_process'
 import inquirer from 'inquirer' // Added inquirer for prompts
-import { runPreflightChecks } from '../utils/guards.js'
+import { chaeckUserEnvironment } from '../utils/guards.js'
+interface RegistryFile {
+  path: string
+  content: string
+}
+
+interface RegistryComponentResponse {
+  packageDependencies?: string[]
+  componentsDependencies?: string[]
+  files: RegistryFile[]
+}
 
 const REGISTRY_URL = 'https://aura-navy-psi.vercel.app/api/registry'
 
@@ -20,7 +30,27 @@ async function promptOverwrite(componentName: string): Promise<boolean> {
   return overwrite
 }
 
+// Helper to handle writing/injecting files to target directory
+async function writingFiles(
+  files: RegistryFile[],
+  targetDir: string,
+  shouldWrite: boolean,
+  folderName: string
+): Promise<void> {
+  if (shouldWrite) {
+    for (const file of files) {
+      const destPath = path.join(targetDir, file.path)
+      await fs.ensureDir(path.dirname(destPath))
+      await fs.writeFile(destPath, file.content)
+      console.log(`  ✔ Injected ${file.path}`)
+    }
+  } else {
+    console.log(`  ⏭️  Skipped '${folderName}' (Kept custom modifications)`)
+  }
+}
+
 // 2. Recursive function to download a component and all of its sub-components
+// Also add all pnpm-dependencies into a set, so we can install all dependencies after installing all needed components.
 async function downloadComponentTree(
   componentName: string,
   targetDir: string,
@@ -44,11 +74,22 @@ async function downloadComponentTree(
     return
   }
 
-  const data = await response.json()
+  const data = (await response.json()) as RegistryComponentResponse
+
+  if (!data.files || data.files.length === 0) {
+    console.error(
+      `❌ Component '${componentName}' has no files in the registry.`
+    )
+    return
+  }
 
   // 3. Overwrite Protection Logic
   // Safely extract the folder name from the first file path (e.g., "Button" from "Button/Button.tsx")
-  const folderName = data.files[0].path.split('/')[0]
+  const folderName = data.files[0]!.path.split('/')[0] || ''
+  if (!folderName) {
+    console.error(`❌ Invalid file structure for component '${componentName}'.`)
+    return
+  }
   const componentDirPath = path.join(targetDir, folderName)
 
   let shouldWrite = true
@@ -59,25 +100,16 @@ async function downloadComponentTree(
   }
 
   // 4. Inject Files (or skip if user said no)
-  if (shouldWrite) {
-    for (const file of data.files) {
-      const destPath = path.join(targetDir, file.path)
-      await fs.ensureDir(path.dirname(destPath))
-      await fs.writeFile(destPath, file.content)
-      console.log(`  ✔ Injected ${file.path}`)
-    }
-  } else {
-    console.log(`  ⏭️  Skipped '${folderName}' (Kept custom modifications)`)
-  }
+  await writingFiles(data.files, targetDir, shouldWrite, folderName)
 
   // 5. Track its NPM dependencies to install them all at once at the end
-  if (data.dependencies) {
-    data.dependencies.forEach((dep: string) => allNpmDeps.add(dep))
+  if (data.packageDependencies) {
+    data.packageDependencies.forEach((dep: string) => allNpmDeps.add(dep))
   }
 
   // 6. RECURSION FLUIDITY: If this component depends on other internal components, fetch them now!
-  if (data.registryDependencies && data.registryDependencies.length > 0) {
-    for (const subComponent of data.registryDependencies) {
+  if (data.componentsDependencies && data.componentsDependencies.length > 0) {
+    for (const subComponent of data.componentsDependencies) {
       await downloadComponentTree(
         subComponent,
         targetDir,
@@ -99,11 +131,11 @@ export const addCommand = new Command()
     'Skip confirmation prompts and overwrite existing components'
   )
   .action(async (components: string[], options) => {
-    await runPreflightChecks(process.cwd())
+    await chaeckUserEnvironment(process.cwd())
     // Fallback if the user types `pnpm aurajet add` without specifying a component
     if (!components || components.length === 0) {
       console.error(
-        '\n❌ Please specify at least one component to add. (e.g., pnpm aurajet add button card)\n'
+        '\n❌ Please specify at least one component to add. (e.g., pnpm aura add button card)\n'
       )
       return
     }

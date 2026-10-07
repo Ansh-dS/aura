@@ -4,6 +4,7 @@ import path from 'path'
 
 export async function verifyPnpmInstalled(): Promise<boolean> {
   try {
+    // execa helps us to run shell/ terminal commands using node.
     await execa('pnpm', ['--version'])
     return true
   } catch {
@@ -26,7 +27,7 @@ export async function verifyNextJsProject(cwd: string): Promise<boolean> {
   }
 }
 
-export async function runPreflightChecks(cwd: string) {
+export async function chaeckUserEnvironment(cwd: string) {
   const isPnpmInstalled = await verifyPnpmInstalled()
   if (!isPnpmInstalled) {
     console.error(

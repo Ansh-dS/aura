@@ -4,9 +4,17 @@ import fs from 'fs-extra'
 import { execSync } from 'child_process'
 import inquirer from 'inquirer'
 import { askUserQuestions, normalizeSelectedThemes } from './prompts.js'
-import { writeInitFiles, injectNoBlink } from '../utils/writers.js'
+import { writeSetupFiles, injectNoBlink } from '../utils/writers.js'
 import { providersTemplate } from '../utils/strings.js'
-import { runPreflightChecks } from '../utils/guards.js'
+import { chaeckUserEnvironment } from '../utils/guards.js'
+
+interface RegistrySetupResponse {
+  packageDependencies?: string[]
+  files: Array<{
+    name: string
+    content: string
+  }>
+}
 
 const REGISTRY_URL = 'https://aura-navy-psi.vercel.app/api/registry'
 
@@ -24,6 +32,8 @@ async function promptOverwrite(fileName: string): Promise<boolean> {
 }
 
 // Automatically detects whether the user prefers pnpm, yarn, bun, or npm
+// first check inside package.json, if not found then pnpm-lock.yaml, then yarn.lock .........
+// all these packages are at root.
 function detectPackageManager(cwd: string) {
   const packageJsonPath = path.join(cwd, 'package.json')
   if (fs.pathExistsSync(packageJsonPath)) {
@@ -57,6 +67,7 @@ function detectPackageManager(cwd: string) {
   return 'npm install'
 }
 
+// 1.providing the opting weather to run the setup function or not.
 export const setupCommand = program
   .command('setup')
   .description('Initialize the UI library in your project')
@@ -65,7 +76,7 @@ export const setupCommand = program
     'Skip confirmation prompts and overwrite existing setup files'
   )
   .action(async (options) => {
-    await runPreflightChecks(process.cwd())
+    await chaeckUserEnvironment(process.cwd()) // checks weather we have both, Next.js and pnpm or not.
     console.log('🚀 Initializing Aurajet...\n')
 
     const forceOverwrite = options.yes || false
@@ -102,6 +113,7 @@ export const setupCommand = program
         cssFileName = 'globals.css'
       }
 
+      // ensureDir: to create directory with mentioned path, if doesn't exists.
       await fs.ensureDir(targetDir)
 
       // Target directory for the core library components
@@ -118,10 +130,7 @@ export const setupCommand = program
         throw new Error('Failed to fetch setup data.')
       }
 
-      const apiData = (await res.json()) as {
-        dependencies?: string[]
-        files: Array<{ name: string; content: string }>
-      }
+      const apiData = (await res.json()) as RegistrySetupResponse
 
       // Cleanup old config files if they exist from a legacy installation
       const configPath = path.join(cwd, 'ui-lib.config.json')
@@ -151,7 +160,7 @@ export const setupCommand = program
 
       // Pass ONLY the confirmed files to the writer utility
       if (filesToWrite.length > 0) {
-        const cssResult = await writeInitFiles(
+        const cssResult = await writeSetupFiles(
           componentsDir,
           targetDir,
           cssFileName,
@@ -194,12 +203,12 @@ export const setupCommand = program
       }
 
       // 8. Install required foundational dependencies (like next-themes, clsx, tailwind-merge)
-      if (apiData.dependencies?.length) {
+      if (apiData.packageDependencies?.length) {
         console.log(
-          `\n📦 Installing architecture dependencies: ${apiData.dependencies.join(', ')}...`
+          `\n📦 Installing architecture dependencies: ${apiData.packageDependencies.join(', ')}...`
         )
         const installCommand = detectPackageManager(cwd)
-        execSync(`${installCommand} ${apiData.dependencies.join(' ')}`, {
+        execSync(`${installCommand} ${apiData.packageDependencies.join(' ')}`, {
           stdio: 'inherit',
         })
       }

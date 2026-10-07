@@ -1,1 +1,1 @@
-export { setupCommand } from './init/index.js'
+export { setupCommand } from './setup/index.js'
