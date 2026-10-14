@@ -5,9 +5,9 @@ export type GlobalTokens = {
 
   // Consolidated Typography: Only the unchangeable geometry lives here.
   typography: {
-    fontFamily: string // Maps to Manrope (UI Scribe)
+    fontFamily: string
     fontFamilyMono: string
-    fontFamilySerif: string // Maps to Cormorant Garamond (Royal Decree)
+    fontFamilySerif: string
     fontSize: Record<
       'xs' | 'sm' | 'base' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl',
       string

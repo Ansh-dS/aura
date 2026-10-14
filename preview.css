@@ -1619,7 +1619,7 @@
 }
 @property --tw-drop-shadow-alpha {
   syntax: '<percentage>';
-  
+
   inherits: false;
   initial-value: 100%;
 }
